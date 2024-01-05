@@ -5,10 +5,17 @@ const cors = require("cors");
 require("dotenv").config();
 // This is your test secret API key.
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
-
 const app = express();
 const port = process.env.PORT || 5000;
+//mailgun instance
+const formData = require('form-data');
+const Mailgun = require('mailgun.js');
+const mailgun = new Mailgun(formData);
 
+const mg = mailgun.client({
+	username: 'api',
+	key: process.env.MAIL_GUN_API_KEY,
+});
 //middlewares
 app.use(cors());
 app.use(express.json());
@@ -95,7 +102,7 @@ async function run() {
       next();
     };
 
-    app.get("/users/admin/:email", verifyToken, async (req, res) => {
+    app.get("/users/admin/:email", verifyToken, verifyAdmin, async (req, res) => {
       console.log("Message: ", req.params.email, req.decoded.email);
       const email = req.params.email;
       if (email !== req.decoded.email) {
@@ -255,6 +262,25 @@ async function run() {
         },
       };
       const deleteResult = await cartCollection.deleteMany(query);
+      //user user mail about payment confirmation
+      mg.messages
+	.create(process.env.MAIL_GUN_SENDING_DOMAIN, {
+		from: "Mailgun Sandbox <postmaster@sandbox3c6f688ad1864fee9d34d61411f35aea.mailgun.org>",
+		to: ["shukantobaidya2018@gmail.com"],
+		subject: "Bistro Boss Order Confirmation",
+		text: "Testing some Mailgun awesomness!",
+    html:`
+    <div>
+    <h1>Thanks for your order</h1>
+    <p>Your transaction Id: ${payment.transactionId}</p>
+    <a href="https://bistro-boss-restaurant-mern.web.app/order/salad">Continue Shopping!</a>
+    </div>
+    `
+    
+	})
+	.then(msg => console.log(msg)) // logs response data
+	.catch(err => console.log(err)); // logs any error`;
+
       res.send({ paymentResult, deleteResult });
     });
 
@@ -355,9 +381,9 @@ async function run() {
 
     // Send a ping to confirm a successful connection
     // await client.db("admin").command({ ping: 1 });
-    // console.log(
-    //   "Pinged your deployment. You successfully connected to MongoDB!"
-    // );
+    console.log(
+      "Pinged your deployment. You successfully connected to MongoDB!"
+    );
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
